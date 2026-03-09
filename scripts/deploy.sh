@@ -36,16 +36,18 @@ fi
 
 # 3. Frontend Setup & PM2 (Port: 3700)
 echo "--- [Frontend] Managing Processes ---"
+cd front
+echo "Installing frontend dependencies..."
+npm install
 pm2 describe edu-front > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "Restarting edu-front..."
     pm2 restart edu-front
 else
     echo "Starting edu-front..."
-    cd front
     pm2 start "npm run dev -- --host 0.0.0.0 --port $FRONT_PORT" --name "edu-front"
-    cd ..
 fi
+cd ..
 
 echo "✨ Deployment Completed! (Front: $FRONT_PORT, Back: $BACK_PORT)"
 pm2 save

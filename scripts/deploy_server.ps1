@@ -89,9 +89,12 @@ $RemoteCommand = @"
     ./scripts/deploy.sh
 "@
 
-# 4. 서버 원격 명령어 실행 (사용자 제안 정규화 방식 적용)
-$NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
-ssh -i "$SshKey" "$SshUser@$SshHost" "$NormalizedCommand"
+# 임시 파일 생성 및 실행 (BOM 없이 UTF-8 저장 및 Unix 개행 처리하여 리눅스 호환성 확보)
+$TempScript = "remote_deploy_run.sh"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $TempScript), $RemoteCommand.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+scp -i "$SshKey" $TempScript "$SshUser@${SshHost}:/tmp/$TempScript"
+ssh -i "$SshKey" "$SshUser@${SshHost}" "bash /tmp/$TempScript"
+Remove-Item $TempScript
 
-Write-Host "`n=== Deployment Completed Successfully! ===" -ForegroundColor Green
-Write-Host "URL: https://$DOMAIN" -ForegroundColor Blue
+Write-Host "=== Deployment Completed ===" -ForegroundColor Green
+Write-Host "Check status: ssh -i '$SshKey' $SshUser@${SshHost} 'pm2 list'" -ForegroundColor Blue
