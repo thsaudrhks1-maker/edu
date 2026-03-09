@@ -1,50 +1,99 @@
+# ./scripts/deploy_server.ps1
+
 # ========================================================
-# EDU Project - Git Based Deployment Script (Final)
+# EDU - Deployment Script (Git & DB Sync)
 # ========================================================
 
-param ([string]$CommitMessage = "Update: Final deploy sync for EDU project")
+param ([string]$CommitMessage = "Update: Deploy EDU project to production")
 
-# 1. 설정 및 경로
-$DOMAIN = "edu.sogething.com"
-$SSH_KEY = "C:\Users\P6\.ssh\id_rsa"
-$SSH_USER = "ubuntu"
-$SSH_HOST = "168.107.52.201"
-$REMOTE_PATH = "/home/ubuntu/edu"
+# 0. 경로 설정
+$PROJECT_ROOT = "C:\github\edu"
+Set-Location $PROJECT_ROOT
+Write-Host "Working Directory: $PROJECT_ROOT" -ForegroundColor Cyan
 
-Write-Host "=== Starting EDU Project Deployment ($DOMAIN) ===" -ForegroundColor Cyan
+# .env에서 SSH 정보 및 DB 설정 로드
+$EnvPath = Join-Path (Get-Location) ".env"
+if (Test-Path $EnvPath) {
+    Get-Content $EnvPath | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $parts = $line.Split("=", 2)
+            $key = $parts[0].Trim()
+            $value = $parts[1].Trim().Trim('"').Trim("'")
+            if ($key -eq "SSH_KEY_PATH") { $SshKey = $value }
+            if ($key -eq "SSH_USER") { $SshUser = $value }
+            if ($key -eq "SSH_HOST") { $SshHost = $value }
+        }
+    }
+}
 
-# 2. 로컬 빌드
-Write-Host "[1/3] Building Frontend Locally..." -ForegroundColor Yellow
-cd front
-npm run build
-if ($LASTEXITCODE -ne 0) { Write-Error "Build failed!"; exit }
-cd ..
+# 기본값 설정 (SSH 설정이 기록된 경우)
+if (-not $SshKey) { $SshKey = "C:\Users\P6\.ssh\id_rsa" }
+if (-not $SshUser) { $SshUser = "ubuntu" }
+if (-not $SshHost) { $SshHost = "168.107.52.201" }
+
+# 1. Local DB Backup
+Write-Host "[1/5] Backing up local DB..." -ForegroundColor Yellow
+$PythonPath = ".\venv\Scripts\python.exe"
+& $PythonPath ".\local_db_backup.py"
+
+if (Test-Path "local_db.sql") {
+    Write-Host "[2/5] Sending DB dump to server..." -ForegroundColor Yellow
+    scp -i "$SshKey" "local_db.sql" "$SshUser@${SshHost}:~/edu/local_db.sql"
+} else {
+    Write-Host "Warning: local_db.sql not found!" -ForegroundColor Red
+}
+
+# 2. Local Front Build (Optional - for quick update)
+Write-Host "[3/5] Building Frontend Locally..." -ForegroundColor Yellow
+cd front; npm run build; cd ..
 
 # 3. Git Push
-Write-Host "[2/3] Pushing code to server via Git..." -ForegroundColor Yellow
+Write-Host "[4/5] Pushing code to server..." -ForegroundColor Yellow
 git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 4. 서버 원격 명령어 실행
-Write-Host "[3/3] Updating remote server (Executing deploy.sh)..." -ForegroundColor Yellow
+# 4. Server Commands
+Write-Host "[5/5] Updating server..." -ForegroundColor Yellow
 
-$RemoteCommand = @"
-    if [ ! -d "$REMOTE_PATH/.git" ]; then
-        echo '[Initial Setup] Cloning repository...'
-        rm -rf $REMOTE_PATH
-        git clone https://github.com/thsaudrhks1-maker/edu.git $REMOTE_PATH
+$RemoteCommand = @'
+    # 프로젝트 폴더가 없으면 생성/클론
+    if [ ! -d "~/edu/.git" ]; then
+        echo "[Initial Setup] Cloning repository into ~/edu..."
+        git clone https://github.com/thsaudrhks1-maker/edu.git ~/edu
     fi
-    cd $REMOTE_PATH
-    echo '--- [Server] Syncing latest code ---'
-    git fetch --all && git reset --hard origin/main
-    echo '--- [Server] Running deploy.sh ---'
-    chmod +x ./scripts/deploy.sh
+
+    cd ~/edu && 
+    echo "[Step 0] Backing up REAL Server DB before update..." &&
+    ~/edu/venv/bin/python ~/edu/server_db_backup.py &&
+    
+    echo "[Step 1] Updating Code (Git Reset)..." &&
+    git fetch --all && 
+    git reset --hard origin/main && 
+    
+    echo "[Step 2] Syncing Nginx Config..." &&
+    if [ -f ~/edu/nginx_edu.sogething.conf ]; then
+        sudo cp ~/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
+        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/ &&
+        sudo nginx -t &&
+        sudo systemctl reload nginx;
+    else
+        echo "⚠️ Nginx config file not found, skipping...";
+    fi &&
+
+    echo "[Step 3] Restoring DB from Local Dump..." &&
+    ~/edu/venv/bin/python ~/edu/scripts/server_restore_local.py &&
+
+    echo "[Step 4] Installing Dependencies & Building & PM2 Processes..." &&
+    # pm2 list에 없으면 새로 띄우는 배포 스크립트 호출
+    chmod +x ./scripts/deploy.sh &&
     ./scripts/deploy.sh
-"@
+'@
 
-# 개행을 처리하여 안정적으로 전달
-$NormalizedCommand = "bash -c '" + $RemoteCommand.Replace("`r", "").Replace("`n", " ; ") + "'"
-ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "$NormalizedCommand"
+# 명령을 원격 서버에서 실행할 수 있도록 정규화 (개행 제거 및 전송)
+$NormalizedCommand = "bash -c " + "'" + $RemoteCommand.Replace("`r", "").Replace("`n", " ; ") + "'"
+ssh -i "$SshKey" "$SshUser@${SshHost}" "$NormalizedCommand"
 
-Write-Host "`n=== Deployment Process Finished! ===" -ForegroundColor Green
+Write-Host "=== Deployment Completed ===" -ForegroundColor Green
+Write-Host "Check status: ssh -i '$SshKey' $SshUser@${SshHost} 'pm2 list'" -ForegroundColor Blue
