@@ -54,12 +54,12 @@ git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 4. Server Commands
+# 4. Server Commands (안정적인 실행을 위해 임시 스크립트 전송 방식 사용)
 Write-Host "[5/5] Updating server..." -ForegroundColor Yellow
 
-$RemoteCommand = @'
+$RemoteCommand = @"
     # 프로젝트 폴더가 없으면 생성/클론
-    if [ ! -d "~/edu/.git" ]; then
+    if [ ! -d ~/edu/.git ]; then
         echo "[Initial Setup] Cloning repository into ~/edu..."
         git clone https://github.com/thsaudrhks1-maker/edu.git ~/edu
     fi
@@ -75,25 +75,26 @@ $RemoteCommand = @'
     echo "[Step 2] Syncing Nginx Config..." &&
     if [ -f ~/edu/nginx_edu.sogething.conf ]; then
         sudo cp ~/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
-        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/ &&
-        sudo nginx -t &&
-        sudo systemctl reload nginx;
+        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/
+        sudo nginx -t && sudo systemctl reload nginx
     else
-        echo "⚠️ Nginx config file not found, skipping...";
-    fi &&
+        echo "⚠️ Nginx config file not found, skipping..."
+    fi
 
     echo "[Step 3] Restoring DB from Local Dump..." &&
-    ~/edu/venv/bin/python ~/edu/scripts/server_restore_local.py &&
+    ~/edu/venv/bin/python ~/edu/scripts/server_restore_local.py
 
     echo "[Step 4] Installing Dependencies & Building & PM2 Processes..." &&
-    # pm2 list에 없으면 새로 띄우는 배포 스크립트 호출
-    chmod +x ./scripts/deploy.sh &&
+    chmod +x ./scripts/deploy.sh
     ./scripts/deploy.sh
-'@
+"@
 
-# 명령을 원격 서버에서 실행할 수 있도록 정규화 (개행 제거 및 전송)
-$NormalizedCommand = "bash -c " + "'" + $RemoteCommand.Replace("`r", "").Replace("`n", " ; ") + "'"
-ssh -i "$SshKey" "$SshUser@${SshHost}" "$NormalizedCommand"
+# 임시 파일 생성 및 실행 (개행 문자 문제 해결)
+$TempScript = "remote_deploy_run.sh"
+$RemoteCommand | Out-File -FilePath $TempScript -Encoding utf8
+scp -i "$SshKey" $TempScript "$SshUser@${SshHost}:/tmp/$TempScript"
+ssh -i "$SshKey" "$SshUser@${SshHost}" "bash /tmp/$TempScript"
+Remove-Item $TempScript
 
 Write-Host "=== Deployment Completed ===" -ForegroundColor Green
 Write-Host "Check status: ssh -i '$SshKey' $SshUser@${SshHost} 'pm2 list'" -ForegroundColor Blue
