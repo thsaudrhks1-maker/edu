@@ -1,56 +1,47 @@
 #!/bin/bash
 
-# 설정
-PROJECT_DIR=~/smart_security
-BACK_PORT=8600
-FRONT_PORT=3600
+# 설정 (EDU 프로젝트 규격)
+PROJECT_DIR=~/edu
+BACK_PORT=8700
+FRONT_PORT=3700
 
-echo "🚀 Starting Deployment Process..."
-
-# 프로젝트 디렉토리로 이동
+echo "🚀 Starting EDU Deployment Process..."
 cd $PROJECT_DIR || exit
 
-# 1. Backend Setup (가상환경 및 라이브러리 설치)
-echo "--- [Backend] Setting up dependencies ---"
+# 1. Nginx 설정 동기화
+echo "--- [Nginx] Syncing Configuration ---"
+if [ -f "nginx_edu.sogething.conf" ]; then
+    sudo cp nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething
+    sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/
+    sudo nginx -t && sudo systemctl reload nginx
+else
+    echo "⚠️ nginx_edu.sogething.conf not found!"
+fi
+
+# 2. Backend Setup & PM2 (Port: 8700)
+echo "--- [Backend] Managing Processes ---"
 if [ ! -d "venv" ]; then
     python3 -m venv venv
-    echo "Created virtual environment."
 fi
-
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r back/requirements.txt
 
-# 2. Frontend Setup (패키지 설치)
-echo "--- [Frontend] Installing dependencies ---"
-cd front
-npm install
-cd ..
-
-# 3. PM2 Process Management (서버 재시작)
-echo "--- [PM2] Managing Processes ---"
-
-# Smart-Back (Backend: 8500)
-# 이미 떠있으면 reload, 없으면 start
-pm2 describe smart-back > /dev/null
+pm2 describe edu-back > /dev/null
 if [ $? -eq 0 ]; then
-    echo "Reloading smart-back..."
-    pm2 reload smart-back
+    pm2 reload edu-back
 else
-    echo "Starting smart-back..."
-    # venv 내부의 uvicorn을 절대 경로로 실행
-    pm2 start "$PROJECT_DIR/venv/bin/uvicorn back.main:app --host 0.0.0.0 --port $BACK_PORT" --name "smart-back"
+    pm2 start "$PROJECT_DIR/venv/bin/uvicorn main:app --host 0.0.0.0 --port $BACK_PORT" --name "edu-back" --cwd "$PROJECT_DIR/back"
 fi
 
-# Smart-Front (Frontend: 3500)
-pm2 describe smart-front > /dev/null
+# 3. Frontend Setup & PM2 (Port: 3700)
+echo "--- [Frontend] Managing Processes ---"
+pm2 describe edu-front > /dev/null
 if [ $? -eq 0 ]; then
-    echo "Restarting smart-front..."
-    pm2 restart smart-front
+    pm2 restart edu-front
 else
-    echo "Starting smart-front..."
     cd front
-    # 개발 서버(vite) 모드로 실행. 배포용 빌드(serve)가 필요하면 변경 가능.
-    pm2 start "npm run dev -- --host 0.0.0.0 --port $FRONT_PORT" --name "smart-front"
+    # 개발 서버(vite) 모드 실행
+    pm2 start "npm run dev -- --host 0.0.0.0 --port $FRONT_PORT" --name "edu-front"
     cd ..
 fi
 
