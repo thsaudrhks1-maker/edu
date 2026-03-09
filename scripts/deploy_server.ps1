@@ -30,6 +30,14 @@ git push origin main
 Write-Host "[3/3] Updating remote server..." -ForegroundColor Yellow
 
 $RemoteCommand = @"
+    # 1. edu 폴더가 없거나 Git 저장소가 아니면 최초 클론 실행
+    if [ ! -d "$REMOTE_PATH/.git" ]; then
+        echo '[Initial Setup] Cloning repository into $REMOTE_PATH...'
+        # 폴더가 비어있지 않을 수 있으므로 백업 후 삭제
+        rm -rf $REMOTE_PATH
+        git clone https://github.com/thsaudrhks1-maker/edu.git $REMOTE_PATH
+    fi
+
     cd $REMOTE_PATH && 
     echo '[Step 1] Syncing Code (Git Reset)...' &&
     git fetch --all && 
