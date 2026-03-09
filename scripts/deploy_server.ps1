@@ -32,30 +32,30 @@ if (-not $SshKey) { $SshKey = "C:\Users\P6\.ssh\id_rsa" }
 if (-not $SshUser) { $SshUser = "ubuntu" }
 if (-not $SshHost) { $SshHost = "168.107.52.201" }
 
-# 1. Local DB Backup
-Write-Host "[1/5] Backing up local DB..." -ForegroundColor Yellow
-$PythonPath = ".\venv\Scripts\python.exe"
-& $PythonPath ".\local_db_backup.py"
+# 1. Local DB Backup (Skipped by User)
+# Write-Host "[1/5] Backing up local DB..." -ForegroundColor Yellow
+# $PythonPath = ".\venv\Scripts\python.exe"
+# & $PythonPath ".\local_db_backup.py"
 
-if (Test-Path "local_db.sql") {
-    Write-Host "[2/5] Sending DB dump to server..." -ForegroundColor Yellow
-    scp -i "$SshKey" "local_db.sql" "$SshUser@${SshHost}:~/edu/local_db.sql"
-} else {
-    Write-Host "Warning: local_db.sql not found!" -ForegroundColor Red
-}
+# if (Test-Path "local_db.sql") {
+#     Write-Host "[2/5] Sending DB dump to server..." -ForegroundColor Yellow
+#     scp -i "$SshKey" "local_db.sql" "$SshUser@${SshHost}:~/edu/local_db.sql"
+# } else {
+#     Write-Host "Warning: local_db.sql not found!" -ForegroundColor Red
+# }
 
 # 2. Local Front Build (Optional - for quick update)
-Write-Host "[3/5] Building Frontend Locally..." -ForegroundColor Yellow
+Write-Host "[1/3] Building Frontend Locally..." -ForegroundColor Yellow
 cd front; npm run build; cd ..
 
 # 3. Git Push
-Write-Host "[4/5] Pushing code to server..." -ForegroundColor Yellow
+Write-Host "[2/3] Pushing code to server..." -ForegroundColor Yellow
 git add .
 git commit -m "$CommitMessage"
 git push origin main
 
 # 4. Server Commands (안정적인 실행을 위해 임시 스크립트 전송 방식 사용)
-Write-Host "[5/5] Updating server..." -ForegroundColor Yellow
+Write-Host "[3/3] Updating server..." -ForegroundColor Yellow
 
 $RemoteCommand = @"
     # 프로젝트 폴더가 없으면 생성/클론
@@ -65,8 +65,8 @@ $RemoteCommand = @"
     fi
 
     cd ~/edu && 
-    echo "[Step 0] Backing up REAL Server DB before update..." &&
-    ~/edu/venv/bin/python ~/edu/server_db_backup.py &&
+    # echo "[Step 0] Backing up REAL Server DB before update..." &&
+    # ~/edu/venv/bin/python ~/edu/server_db_backup.py &&
     
     echo "[Step 1] Updating Code (Git Reset)..." &&
     git fetch --all && 
@@ -81,8 +81,8 @@ $RemoteCommand = @"
         echo "⚠️ Nginx config file not found, skipping..."
     fi
 
-    echo "[Step 3] Restoring DB from Local Dump..." &&
-    ~/edu/venv/bin/python ~/edu/scripts/server_restore_local.py
+    # echo "[Step 3] Restoring DB from Local Dump..." &&
+    # ~/edu/venv/bin/python ~/edu/scripts/server_restore_local.py
 
     echo "[Step 4] Installing Dependencies & Building & PM2 Processes..." &&
     chmod +x ./scripts/deploy.sh
