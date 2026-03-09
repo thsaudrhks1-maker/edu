@@ -1,0 +1,44 @@
+# [오라클 클라우드 (OCI) 배포 가이드]
+
+본 가이드는 Ubuntu 인스턴스를 기준으로 Docker를 활용한 배포 순서를 설명합니다.
+
+## 1. 인스턴스 보안 목록 (Security List) 설정
+오라클 클라우드 콘솔에서 인프라의 수신 규칙(Ingress Rules)을 추가해야 합니다.
+- 포트 80 (HTTP): Nginx 접속용
+- 포트 443 (HTTPS): SSL 적용 시
+- (선택) 포트 5600: DB 외부 접속 필요 시 (비권장, SSH 터널링 사용 권장)
+
+## 2. 서버 기초 설정 (Ubuntu 기준)
+```bash
+# 패키지 업데이트
+sudo apt update && sudo apt upgrade -y
+
+# Docker 설치
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# Docker Compose 설치
+sudo apt install docker-compose -y
+```
+
+## 3. 리눅스 방화벽(iptables/ufw) 개방
+오라클 리눅스는 OS 자체 방화벽이 강하게 걸려 있습니다.
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw reload
+
+# 또는 iptables 직접 개방
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+## 4. 프로젝트 배포
+1. 로컬에서 `git push`, 서버에서 `git pull`
+2. `.env` 파일 서버 환경에 맞춰 수정 (DB_HOST는 로컬 테스트 시 localhost, 도커 내부 통신 시 db 서비스명 사용)
+3. `docker-compose up -d --build` 실행
+
+## 5. Nginx + Frontend 배포 방식
+- 프론트엔드(`npm run build`) 결과물을 Nginx 컨테이너의 `/usr/share/nginx/html`에 마운트합니다.
+- `nginx/default.conf`에서 `/api` 경로를 백엔드 컨테이너로 프록시 패스합니다.

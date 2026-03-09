@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+asyncpg
+pydantic
+pydantic-settings
+python-dotenv
+python-multipart
+jose
+passlib
+bcrypt
+# DB Schema Management (Atlas Support)
+atlas-provider-sqlalchemy
+email-validator
+passlib[bcrypt]
+python-jose[cryptography]

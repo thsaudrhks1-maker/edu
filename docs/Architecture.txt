@@ -1,0 +1,21 @@
+전체 프로젝트 구성도
+
+1. 기술 스택
+   * 프론트엔드: React (Vite), Vanilla CSS, api.js (중앙 집중식 API 관리)
+   * 백엔드: FastAPI (Asynchronous)
+   * 데이터베이스: PostgreSQL (AsyncPG)
+   * DB 관리: SQLAlchemy (Async), Atlas (Schema Management & Migration)
+   * 쿼리 방식: Raw SQL (Asynchronous)
+   * 비디오: YouTube Data API
+   * 결제: PortOne API
+
+2. 시스템 아키텍처 (Functional Layered Architecture)
+   * Domain Folders: `back/{domain}/` 하위에 Router, Service, Repository, Model 통합 관리
+   * Clients: `back/clients/` 외부 API 연동 클라이언트 로직
+   * Utils: `back/utils/` 예외 처리, 날짜/JSON 처리 등 공통 모듈
+   * Core: `back/core/` 인프라 및 DB 설정
+   * Client Side: React 기반의 럭셔리 대시보드
+
+3. 도메인 (P6IX - Primavera Construction e-Learning)
+   * 건축 공정 관리 전문가 및 초보자를 위한 프리마베라 실전 교육 사이트
+   * 수준별 강의 카테고리 구성 (기초, 중급, 실무)

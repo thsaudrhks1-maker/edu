@@ -1,0 +1,15 @@
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    container_name: ${DB_CONTAINER_NAME:-edu_db}
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-0000}
+      POSTGRES_DB: ${DB_NAME:-e_learning}
+    ports:
+      - "${DB_PORT:-5700}:5432"
+    volumes:
+      - e_learning_data:/var/lib/postgresql/data
+
+volumes:
+  e_learning_data:

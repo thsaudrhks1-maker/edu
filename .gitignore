@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+*.swp
+*.bak
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vscode/
+
+# Database / Docker
+.docker_data/
+postgres_data/
+e_learning_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project Docs / Logs (Optional - keep if you want to share, but usually .log is ignored)
+*.log
+atlas.exe

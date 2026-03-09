@@ -1,0 +1,43 @@
+데이터베이스 스키마 초안
+
+1. Users (사용자 정보)
+   * id: UUID (PK)
+   * email: String (Unique)
+   * hashed_password: String
+   * name: String
+   * role: String (admin, instructor, student)
+   * created_at: DateTime
+
+2. Courses (강의 정보)
+   * id: Integer (PK, AI)
+   * title: String
+   * description: Text
+   * thumbnail_url: String
+   * price: Integer
+   * level: String (Basic, Intermediate, Expert)
+   * instructor_id: UUID (FK to Users.id)
+   * created_at: DateTime
+
+3. Lectures (개별 강의 영상)
+   * id: Integer (PK, AI)
+   * course_id: Integer (FK to Courses.id)
+   * title: String
+   * youtube_id: String
+   * order_num: Integer
+   * duration: Integer (Seconds)
+
+4. Payments (결제 내역)
+   * id: UUID (PK)
+   * user_id: UUID (FK to Users.id)
+   * course_id: Integer (FK to Courses.id)
+   * amount: Integer
+   * status: String (Paid, Refunded, Failed)
+   * payment_key: String (External ID)
+   * approved_at: DateTime
+
+5. Enrollments (수강 내역 및 진도율)
+   * user_id: UUID (FK to Users.id)
+   * course_id: Integer (FK to Courses.id)
+   * progress: Float (0.0 ~ 100.0)
+   * last_watched_at: DateTime
+   * PK: (user_id, course_id)

@@ -1,0 +1,9 @@
+python -m venv venv
+
+.\venv\Scripts\activate
+
+.\venv\Scripts\pip install -r back/requirements.txt
+
+
+.\scripts\db_sync.ps1
+.\scripts\deploy.ps1
