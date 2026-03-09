@@ -91,7 +91,7 @@ $RemoteCommand = @"
 
 # 임시 파일 생성 및 실행 (개행 문자 문제 해결)
 $TempScript = "remote_deploy_run.sh"
-$RemoteCommand | Out-File -FilePath $TempScript -Encoding utf8
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $TempScript), $RemoteCommand.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 scp -i "$SshKey" $TempScript "$SshUser@${SshHost}:/tmp/$TempScript"
 ssh -i "$SshKey" "$SshUser@${SshHost}" "bash /tmp/$TempScript"
 Remove-Item $TempScript
