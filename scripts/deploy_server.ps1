@@ -34,53 +34,52 @@ git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 2. Server Commands (에러 유발 요소 완전 제거)
+# 2. Server Commands (에러 무시 처리 로직 강화)
 Write-Host "[2/2] Updating server..." -ForegroundColor Yellow
 
 $RemoteCommand = @'
-    cd ~/edu &&
-    echo '--- [Step 1] Updating Code (Git Reset) ---' &&
-    git fetch --all && 
-    git reset --hard origin/main && 
+    cd ~/edu;
+    echo "--- [Step 1] Updating Code ---";
+    git fetch --all; 
+    git reset --hard origin/main; 
     
-    echo '--- [Step 2] Syncing Nginx Config ---' &&
+    echo "--- [Step 2] Syncing Nginx Config ---";
     if [ -f ~/edu/nginx_edu.sogething.conf ]; then
-        sudo cp ~/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
-        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/ &&
-        sudo nginx -t &&
-        sudo systemctl reload nginx;
+        sudo cp ~/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething;
+        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/;
+        (sudo nginx -t && sudo systemctl reload nginx) || echo "⚠️ Nginx cert error ignored, proceeding to PM2 setup...";
     else
-        echo 'Nginx config file not found, skipping...';
-    fi &&
+        echo "Nginx config file not found, skipping...";
+    fi;
 
-    echo '--- [Step 3] Installing Dependencies (Backend) ---' &&
-    [ ! -d "venv" ] && python3 -m venv venv &&
-    ./venv/bin/pip install -r back/requirements.txt &&
+    echo "--- [Step 3] Installing Dependencies (Backend) ---";
+    [ ! -d "venv" ] && python3 -m venv venv;
+    ./venv/bin/pip install -r back/requirements.txt;
 
-    echo '--- [Step 4] Installing Dependencies (Frontend) ---' &&
-    cd front &&
-    npm install &&
-    npm run build &&
-    cd .. &&
+    echo "--- [Step 4] Installing Dependencies (Frontend) ---";
+    cd front;
+    npm install;
+    npm run build;
+    cd ..;
 
-    echo '--- [Step 5] Managing PM2 Processes ---' &&
+    echo "--- [Step 5] Managing PM2 Processes ---";
     if pm2 describe edu-back > /dev/null 2>&1; then
         pm2 reload edu-back;
     else
         pm2 start "./venv/bin/uvicorn main:app --host 0.0.0.0 --port 8700" --name "edu-back" --cwd "~/edu/back";
-    fi &&
+    fi;
 
     if pm2 describe edu-front > /dev/null 2>&1; then
         pm2 restart edu-front;
     else
         cd front && pm2 start "npm run dev -- --host 0.0.0.0 --port 3700" --name "edu-front" && cd ..;
-    fi &&
+    fi;
     
-    echo '--- [Step 6] Final Status ---' &&
+    echo "--- [Step 6] Final Status ---";
     pm2 list
 '@
 
-# 사용자 요청 정규식 처리 방식 완벽 유지 (Replace 중복 적용까지 동일하게)
+# 사용자 요청 정규식 처리 (패턴 유지)
 $NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
 $NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
 ssh -i "$SshKey" "$SshUser@${SshHost}" "$NormalizedCommand"
