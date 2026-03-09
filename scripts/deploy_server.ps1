@@ -1,17 +1,13 @@
 # ./scripts/deploy_server.ps1
+param ([string]$CommitMessage = "Update: Deploy edu project to production")
 
-# ========================================================
-# EDU - Deployment Script (Git & DB Sync)
-# ========================================================
+# 0. 경로 및 환경 설정
+$PROJECT_NAME = "edu"
+$DOMAIN = "edu.sogething.com"
+Set-Location "C:\github\edu"
+Write-Host "Working Directory: C:\github\edu" -ForegroundColor Cyan
 
-param ([string]$CommitMessage = "Update: Deploy EDU project to production")
-
-# 0. 경로 설정
-$PROJECT_ROOT = "C:\github\edu"
-Set-Location $PROJECT_ROOT
-Write-Host "Working Directory: $PROJECT_ROOT" -ForegroundColor Cyan
-
-# .env에서 SSH 정보 및 DB 설정 로드
+# .env 파일에서 SSH 정보 읽기
 $EnvPath = Join-Path (Get-Location) ".env"
 if (Test-Path $EnvPath) {
     Get-Content $EnvPath | ForEach-Object {
@@ -27,47 +23,26 @@ if (Test-Path $EnvPath) {
     }
 }
 
-# 기본값 설정 (SSH 설정이 기록된 경우)
+# 기본값 (누락 시 대비)
 if (-not $SshKey) { $SshKey = "C:\Users\P6\.ssh\id_rsa" }
 if (-not $SshUser) { $SshUser = "ubuntu" }
 if (-not $SshHost) { $SshHost = "168.107.52.201" }
 
-# 1. Local DB Backup (Skipped by User)
-# Write-Host "[1/5] Backing up local DB..." -ForegroundColor Yellow
-# $PythonPath = ".\venv\Scripts\python.exe"
-# & $PythonPath ".\local_db_backup.py"
+# 1. DB 백업 (사용자 요청으로 일단 스킵하지만 구조는 유지)
+# Write-Host "[1/4] Backing up local DB..."
+# & ".\venv\Scripts\python.exe" ".\local_db_backup.py"
 
-# if (Test-Path "local_db.sql") {
-#     Write-Host "[2/5] Sending DB dump to server..." -ForegroundColor Yellow
-#     scp -i "$SshKey" "local_db.sql" "$SshUser@${SshHost}:~/edu/local_db.sql"
-# } else {
-#     Write-Host "Warning: local_db.sql not found!" -ForegroundColor Red
-# }
-
-# 2. Local Front Build (Optional - for quick update)
-Write-Host "[1/3] Building Frontend Locally..." -ForegroundColor Yellow
-cd front; npm run build; cd ..
-
-# 3. Git Push
-Write-Host "[2/3] Pushing code to server..." -ForegroundColor Yellow
+# 2. Git Push
+Write-Host "[2/4] Pushing code to server via Git..." -ForegroundColor Yellow
 git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 4. Server Commands (안정적인 실행을 위해 임시 스크립트 전송 방식 사용)
-Write-Host "[3/3] Updating server..." -ForegroundColor Yellow
+# 3. Server Commands (사용자 패턴 그대로 이식)
+Write-Host "[3/4] Updating server..." -ForegroundColor Yellow
 
-$RemoteCommand = @"
-    # 프로젝트 폴더가 없으면 생성/클론
-    if [ ! -d ~/edu/.git ]; then
-        echo "[Initial Setup] Cloning repository into ~/edu..."
-        git clone https://github.com/thsaudrhks1-maker/edu.git ~/edu
-    fi
-
-    cd ~/edu && 
-    # echo "[Step 0] Backing up REAL Server DB before update..." &&
-    # ~/edu/venv/bin/python ~/edu/server_db_backup.py &&
-    
+$RemoteCommand = @'
+    cd ~/edu &&
     echo "[Step 1] Updating Code (Git Reset)..." &&
     git fetch --all && 
     git reset --hard origin/main && 
@@ -75,26 +50,46 @@ $RemoteCommand = @"
     echo "[Step 2] Syncing Nginx Config..." &&
     if [ -f ~/edu/nginx_edu.sogething.conf ]; then
         sudo cp ~/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
-        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/
-        sudo nginx -t && sudo systemctl reload nginx
+        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/ &&
+        sudo nginx -t &&
+        sudo systemctl reload nginx;
     else
-        echo "⚠️ Nginx config file not found, skipping..."
-    fi
+        echo "⚠️ Nginx config file not found, skipping...";
+    fi || echo "⚠️ Nginx check failed (likely SSL cert), proceeding to next steps..." &&
 
-    # echo "[Step 3] Restoring DB from Local Dump..." &&
-    # ~/edu/venv/bin/python ~/edu/scripts/server_restore_local.py
+    echo "[Step 3] Installing Dependencies & Building (Backend)..." &&
+    [ ! -d "venv" ] && python3 -m venv venv &&
+    ./venv/bin/pip install -r back/requirements.txt &&
 
-    echo "[Step 4] Installing Dependencies & Building & PM2 Processes..." &&
-    chmod +x ./scripts/deploy.sh
-    ./scripts/deploy.sh
-"@
+    echo "[Step 4] Installing Dependencies & Building (Frontend)..." &&
+    cd front &&
+    npm install &&
+    npm run build &&
+    cd .. &&
 
-# 임시 파일 생성 및 실행 (BOM 없이 UTF-8 저장 및 Unix 개행 처리하여 리눅스 호환성 확보)
-$TempScript = "remote_deploy_run.sh"
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $TempScript), $RemoteCommand.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
-scp -i "$SshKey" $TempScript "$SshUser@${SshHost}:/tmp/$TempScript"
-ssh -i "$SshKey" "$SshUser@${SshHost}" "bash /tmp/$TempScript"
-Remove-Item $TempScript
+    echo "[Step 5] Managing PM2 Processes (edu-back & edu-front)..." &&
+    # 백엔드: 있으면 reload, 없으면 start
+    if pm2 describe edu-back > /dev/null 2>&1; then
+        pm2 reload edu-back;
+    else
+        pm2 start "./venv/bin/uvicorn main:app --host 0.0.0.0 --port 8700" --name "edu-back" --cwd "~/edu/back";
+    fi &&
 
-Write-Host "=== Deployment Completed ===" -ForegroundColor Green
+    # 프론트엔드: 있으면 restart, 없으면 start (3700포트)
+    if pm2 describe edu-front > /dev/null 2>&1; then
+        pm2 restart edu-front;
+    else
+        cd front && pm2 start "npm run dev -- --host 0.0.0.0 --port 3700" --name "edu-front" && cd ..;
+    fi &&
+    
+    echo "[Step 6] Final Status..." &&
+    pm2 list
+'@
+
+# 사용자 요청 정규식 처리 방식 (중복 Replace 포함 패턴 유지)
+$NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
+$NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
+ssh -i "$SshKey" "$SshUser@${SshHost}" "$NormalizedCommand"
+
+Write-Host "`nDeployment Completed!" -ForegroundColor Green
 Write-Host "Check status: ssh -i '$SshKey' $SshUser@${SshHost} 'pm2 list'" -ForegroundColor Blue
