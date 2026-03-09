@@ -89,12 +89,9 @@ $RemoteCommand = @"
     ./scripts/deploy.sh
 "@
 
-# 임시 파일 생성 및 실행 (개행 문자 문제 해결)
-$TempScript = "remote_deploy_run.sh"
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $TempScript), $RemoteCommand.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
-scp -i "$SshKey" $TempScript "$SshUser@${SshHost}:/tmp/$TempScript"
-ssh -i "$SshKey" "$SshUser@${SshHost}" "bash /tmp/$TempScript"
-Remove-Item $TempScript
+# 4. 서버 원격 명령어 실행 (사용자 제안 정규화 방식 적용)
+$NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
+ssh -i "$SshKey" "$SshUser@$SshHost" "$NormalizedCommand"
 
-Write-Host "=== Deployment Completed ===" -ForegroundColor Green
-Write-Host "Check status: ssh -i '$SshKey' $SshUser@${SshHost} 'pm2 list'" -ForegroundColor Blue
+Write-Host "`n=== Deployment Completed Successfully! ===" -ForegroundColor Green
+Write-Host "URL: https://$DOMAIN" -ForegroundColor Blue
