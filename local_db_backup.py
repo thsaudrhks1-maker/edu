@@ -12,17 +12,22 @@ def backup():
 
     output_file = "local_db.sql"
     
-    # Docker exec를 통해 컨테이너 내부의 pg_dump 실행
-    # -U와 -d는 컨테이너 내부의 DB 설정을 따릅니다.
-    command = f"docker exec -t {container_name} pg_dump -U {db_user} -d {db_name} -O -x > {output_file}"
+    print(f"🚀 [LOCAL] DB 백업 시작: {container_name} -> {output_file}")
     
-    print(f"Backing up local database from Docker container: {container_name}...")
+    # 윈도우 PowerShell의 리다이렉션(>) 인코딩 문제를 피하기 위해 
+    # stdout을 직접 캡처하여 파이썬에서 UTF-8로 저장합니다.
+    command = ["docker", "exec", "-i", container_name, "pg_dump", "-U", db_user, "-d", db_name, "--no-owner", "--no-privileges", "--no-comments"]
+    
     try:
-        # PowerShell/Bash 환경에서 리다이렉션(>) 처리를 위해 shell=True 사용
-        subprocess.run(command, shell=True, check=True)
-        print(f"Backup Successful: {output_file}")
+        # stdout을 캡처하여 바로 파일에 씁니다.
+        with open(output_file, "w", encoding="utf-8") as f:
+            result = subprocess.run(command, stdout=f, stderr=subprocess.PIPE, text=False, check=True)
+        
+        print(f"✅ 백업 성공: {output_file}")
     except subprocess.CalledProcessError as e:
-        print(f"Backup Failed: {e}")
+        print(f"❌ 백업 실패: {e.stderr.decode() if e.stderr else str(e)}")
+    except Exception as e:
+        print(f"❌ 에러 발생: {str(e)}")
 
 if __name__ == "__main__":
     backup()

@@ -5,33 +5,50 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def restore():
-    # .env에서 DB 정보 가져오기 (Docker 인수로 활용)
+    # 서버측 전용 복구 스크립트 (Linux Docker 환경용)
     db_user = os.getenv("DB_USER", "postgres")
     db_name = os.getenv("DB_NAME", "edu")
     container_name = os.getenv("DB_CONTAINER_NAME", "edu_db")
-
     input_file = "local_db.sql"
     
-    # 컨테이너 내부의 툴을 이용하므로 호스트에 DB 툴이 설치되어 있지 않아도 됩니다.
-    # docker exec -i는 표준 입력을 리다이렉션으로 받을 수 있게 해줍니다.
-    
-    # 1. 기존 DB 삭제 후 재생성 (완전 덮어씌우기를 위해 권장)
-    drop_db_cmd = f"docker exec -i {container_name} dropdb -U {db_user} {db_name} --if-exists"
-    create_db_cmd = f"docker exec -i {container_name} createdb -U {db_user} {db_name}"
-    
-    # 2. 로컬에서 전송된 dump 파일을 psql로 밀어넣기
-    # < {input_file} 부분은 쉘에서 파일을 읽어 컨테이너 내부로 보내는 역할을 합니다.
-    restore_cmd = f"docker exec -i {container_name} psql -U {db_user} -d {db_name} < {input_file}"
-    
-    print(f"Restoring server database ({db_name}) from {input_file} via Docker...")
+    if not os.path.exists(input_file):
+        print(f"❌ 복구 파일 없음: {input_file}")
+        return False
+
+    print(f"🚀 [SERVER] DB 동기화 시작: {input_file} -> {db_name}")
+
     try:
-        # DB 초기화 및 데이터 복원 실행
-        subprocess.run(drop_db_cmd, shell=True, check=True)
-        subprocess.run(create_db_cmd, shell=True, check=True)
-        subprocess.run(restore_cmd, shell=True, check=True)
-        print("Restore Successful: Database synchronized with local version.")
+        # A. 활성 세션 강제 종료 (DB 초기화 성공을 위해 필수)
+        print("💡 활성 세션 종료 중...")
+        kill_cmd = [
+            "docker", "exec", "-i", container_name, "psql", 
+            "-U", db_user, "-d", "postgres", "-c",
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}' AND pid <> pg_backend_pid();"
+        ]
+        subprocess.run(kill_cmd, capture_output=True)
+
+        # B. DB 초기화 (기존 방 폭파 후 재생성)
+        print(f"💡 기존 '{db_name}' 데이터베이스 초기화 중...")
+        subprocess.run(["docker", "exec", "-i", container_name, "dropdb", "-U", db_user, "--if-exists", db_name], check=True)
+        subprocess.run(["docker", "exec", "-i", container_name, "createdb", "-U", db_user, db_name], check=True)
+
+        # C. 데이터 복구 (docker-exec -i와 stdin 사용으로 특수문자 깨짐 방지)
+        print(f"💡 데이터 복구 진행 중...")
+        with open(input_file, 'rb') as f:
+            restore_cmd = ["docker", "exec", "-i", container_name, "psql", "-U", db_user, "-d", db_name]
+            subprocess.run(restore_cmd, stdin=f, check=True)
+
+        print("-" * 50)
+        print("✅ [SERVER] DB 동기화 완료!")
+        print("-" * 50)
+        return True
+
     except subprocess.CalledProcessError as e:
-        print(f"Restore Failed: {e}")
+        print(f"❌ 복구 실패: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ 치명적 에러: {str(e)}")
+        return False
 
 if __name__ == "__main__":
     restore()

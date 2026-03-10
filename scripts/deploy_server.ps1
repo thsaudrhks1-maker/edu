@@ -15,7 +15,7 @@ $SshHost = "168.107.52.201"
 # 1. Database Sync - Local Backup (로컬 데이터를 SQL로 덤프)
 Write-Host "[1/3] Backing up local database..." -ForegroundColor Yellow
 # 로컬의 Docker DB 컨테이너에서 데이터를 추출하여 local_db.sql을 생성합니다.
-python local_db_backup.py
+.\venv\Scripts\python local_db_backup.py
 if ($LASTEXITCODE -ne 0) { Write-Error "Local DB backup failed!"; exit }
 
 # 2. Git Push (로컬 소스 + DB 덤프 전송)
