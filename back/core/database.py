@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # DATABASE_URL: .env의 설정을 우선하며, 없을 경우 기본값을 사용합니다.
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:0000@localhost:5600/smart_security")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:0000@localhost:5700/edu")
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
