@@ -34,7 +34,7 @@ git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 2. Server Commands (에러 유발하는 모든 괄호와 주석 제거)
+# 2. Server Commands (문제의 venv 체크 로직 수정)
 Write-Host "[2/2] Updating server..." -ForegroundColor Yellow
 
 $RemoteCommand = @'
@@ -49,10 +49,10 @@ $RemoteCommand = @'
         sudo nginx -t &&
         sudo systemctl reload nginx;
     else
-        echo "Nginx config file not found, skipping...";
+        echo "Nginx skipping...";
     fi &&
     echo "--- Step 3 Installing Dependencies Backend ---" &&
-    [ ! -d "venv" ] && python3 -m venv venv &&
+    if [ ! -d venv ]; then python3 -m venv venv; fi &&
     ./venv/bin/pip install -r back/requirements.txt &&
     echo "--- Step 4 Installing Dependencies Frontend ---" &&
     cd front &&
