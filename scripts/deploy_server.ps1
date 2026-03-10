@@ -35,45 +35,33 @@ Write-Host "[3/3] Updating remote server..." -ForegroundColor Yellow
 
 $RemoteCommand = @'
     cd /home/ubuntu/edu &&
-    
     echo "--- Step 0: Ensuring Docker Containers are Running ---" &&
-    # DB 컨테이너가 꺼져있을 수 있으므로 먼저 실행을 보장합니다.
     sudo docker-compose up -d &&
-
     echo "--- Step 1: Syncing Source Code ---" &&
     git fetch --all && 
     git reset --hard origin/main && 
-    
     echo "--- Step 2: Syncing Nginx Config ---" &&
-    # /etc/nginx/sites-available/ 하부에 등록하여 관리하는 방식입니다.
     if [ -f /home/ubuntu/edu/nginx_edu.sogething.conf ]; then
-        sudo cp /home/ubuntu/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
-        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/ &&
-        sudo nginx -t &&
-        sudo systemctl reload nginx;
+        sudo cp /home/ubuntu/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething;
+        sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/;
+        sudo nginx -t && sudo systemctl reload nginx;
     fi;
-
     echo "--- Step 3: Database Synchronization ---" &&
-    # [백업] 로컬 데이터를 덮어씌우기 전, 현재 서버 DB의 상태를 백업(Docker 내부 pg_dump 활용)
     python3 server_db_backup.py &&
-    # [복구/동기화] 로컬에서 넘어온 local_db.sql로 서버 DB를 초기화 및 복원
     python3 server_db_restore.py &&
-
     echo "--- Step 4: Installing & Building ---" &&
     if [ ! -d venv ]; then python3 -m venv venv; fi &&
     ./venv/bin/pip install -r back/requirements.txt &&
     cd front && npm install && npm run build && cd ..;
-
     echo "--- Step 5: Restarting Services ---";
     pm2 delete edu-back edu-front npm > /dev/null 2>&1 || true;
     pm2 start /home/ubuntu/edu/venv/bin/python --name edu-back --cwd /home/ubuntu/edu/back -- -m uvicorn main:app --host 0.0.0.0 --port 8700;
     pm2 start npm --name edu-front --cwd /home/ubuntu/edu/front -- run dev -- --host 0.0.0.0 --port 3700;
-    
     pm2 list;
     pm2 save
 '@
 
-# PowerShell에서 서버로 보낼 명령어를 한 줄의 문자열로 정규화합니다.
+# 명령어 한 줄 변환 (주석이 이미 제거된 상태이므로 개행만 공백으로 치환)
 $NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
 ssh -i "$SshKey" "$SshUser@${SshHost}" "$NormalizedCommand"
 
