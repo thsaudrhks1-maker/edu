@@ -6,8 +6,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# DATABASE_URL: .env의 설정을 우선하며, 없을 경우 기본값을 사용합니다.
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:0000@localhost:5700/edu")
+# 환경변수에서 정보를 가져와서 실시간으로 DB 주소를 조립합니다.
+db_user = os.getenv("DB_USER", "postgres")
+db_pass = os.getenv("DB_PASSWORD", "0000")
+db_host = os.getenv("DB_HOST", "localhost")
+db_port = os.getenv("DB_PORT", "5700")
+db_name = os.getenv("DB_NAME", "edu")
+
+DATABASE_URL = f"postgresql+asyncpg://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
