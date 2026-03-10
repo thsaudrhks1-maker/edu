@@ -34,15 +34,15 @@ git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 2. Server Commands (사용자 템플릿 로직 100% 동일 구현)
+# 2. Server Commands (에러 유발하는 모든 괄호와 주석 제거)
 Write-Host "[2/2] Updating server..." -ForegroundColor Yellow
 
 $RemoteCommand = @'
     cd ~/edu &&
-    echo "[Step 1] Updating Code (Git Reset)..." &&
+    echo "--- Step 1 Updating Code ---" &&
     git fetch --all && 
     git reset --hard origin/main && 
-    echo "[Step 2] Syncing Nginx Config..." &&
+    echo "--- Step 2 Syncing Nginx Config ---" &&
     if [ -f ~/edu/nginx_edu.sogething.conf ]; then
         sudo cp ~/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
         sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/ &&
@@ -51,15 +51,15 @@ $RemoteCommand = @'
     else
         echo "Nginx config file not found, skipping...";
     fi &&
-    echo "[Step 3] Installing Dependencies & Building (Backend)..." &&
+    echo "--- Step 3 Installing Dependencies Backend ---" &&
     [ ! -d "venv" ] && python3 -m venv venv &&
     ./venv/bin/pip install -r back/requirements.txt &&
-    echo "[Step 4] Installing Dependencies & Building (Frontend)..." &&
+    echo "--- Step 4 Installing Dependencies Frontend ---" &&
     cd front &&
     npm install &&
     npm run build &&
     cd .. &&
-    echo "[Step 5] Restarting PM2 Processes..." &&
+    echo "--- Step 5 Managing PM2 Processes ---" &&
     if pm2 describe edu-back > /dev/null 2>&1; then
         pm2 reload edu-back;
     else
@@ -70,11 +70,11 @@ $RemoteCommand = @'
     else
         cd front && pm2 start "npm run dev -- --host 0.0.0.0 --port 3700" --name "edu-front" && cd ..;
     fi &&
-    echo "[Step 6] Final Status..." &&
+    echo "--- Step 6 Final Status ---" &&
     pm2 list
 '@
 
-# 사용자 요청 정규식 처리 방식 (중복 Replace 및 SSH 실행 로직)
+# 사용자 요청 정규식 처리 방식 (Replace 중복 적용 유지)
 $NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
 $NormalizedCommand = $RemoteCommand.Replace("`r", "").Replace("`n", " ")
 ssh -i "$SshKey" "$SshUser@${SshHost}" "$NormalizedCommand"
