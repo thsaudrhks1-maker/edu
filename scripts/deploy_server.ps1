@@ -34,7 +34,7 @@ git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 2. Server Commands (문제의 venv 체크 로직 수정)
+# 2. Server Commands (PM2 이름 및 경로 완전 수정)
 Write-Host "[2/2] Updating server..." -ForegroundColor Yellow
 
 $RemoteCommand = @'
@@ -51,27 +51,17 @@ $RemoteCommand = @'
     else
         echo "Nginx skipping...";
     fi &&
-    echo "--- Step 3 Installing Dependencies Backend ---" &&
+    echo "--- Step 3 Installing Dependencies ---" &&
     if [ ! -d venv ]; then python3 -m venv venv; fi &&
     ./venv/bin/pip install -r back/requirements.txt &&
-    echo "--- Step 4 Installing Dependencies Frontend ---" &&
-    cd front &&
-    npm install &&
-    npm run build &&
-    cd .. &&
-    echo "--- Step 5 Managing PM2 Processes ---" &&
-    if pm2 describe edu-back > /dev/null 2>&1; then
-        pm2 reload edu-back;
-    else
-        pm2 start "./venv/bin/uvicorn main:app --host 0.0.0.0 --port 8700" --name "edu-back" --cwd "~/edu/back";
-    fi &&
-    if pm2 describe edu-front > /dev/null 2>&1; then
-        pm2 restart edu-front;
-    else
-        cd front && pm2 start "npm run dev -- --host 0.0.0.0 --port 3700" --name "edu-front" && cd ..;
-    fi &&
-    echo "--- Step 6 Final Status ---" &&
-    pm2 list
+    cd front && npm install && npm run build && cd .. &&
+    echo "--- Step 4 Cleaning & Restarting PM2 Processes ---" &&
+    pm2 delete edu-back edu-front npm > /dev/null 2>&1 || true &&
+    pm2 start "~/edu/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8700" --name "edu-back" --cwd "~/edu/back" &&
+    pm2 start "npm --name edu-front -- run dev -- --host 0.0.0.0 --port 3700" --cwd "~/edu/front" &&
+    echo "--- Step 5 Final Status ---" &&
+    pm2 list &&
+    pm2 save
 '@
 
 # 사용자 요청 정규식 처리 방식 (Replace 중복 적용 유지)
