@@ -34,33 +34,35 @@ git add .
 git commit -m "$CommitMessage"
 git push origin main
 
-# 2. Server Commands (PM2 이름 및 경로 완전 수정)
+# 2. Server Commands (PM2 경로 및 명령어 완전 수정)
 Write-Host "[2/2] Updating server..." -ForegroundColor Yellow
 
 $RemoteCommand = @'
-    cd ~/edu &&
+    cd /home/ubuntu/edu &&
     echo "--- Step 1 Updating Code ---" &&
     git fetch --all && 
     git reset --hard origin/main && 
+    
     echo "--- Step 2 Syncing Nginx Config ---" &&
-    if [ -f ~/edu/nginx_edu.sogething.conf ]; then
-        sudo cp ~/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
+    if [ -f /home/ubuntu/edu/nginx_edu.sogething.conf ]; then
+        sudo cp /home/ubuntu/edu/nginx_edu.sogething.conf /etc/nginx/sites-available/edu.sogething &&
         sudo ln -sf /etc/nginx/sites-available/edu.sogething /etc/nginx/sites-enabled/ &&
         sudo nginx -t &&
         sudo systemctl reload nginx;
-    else
-        echo "Nginx skipping...";
-    fi &&
+    fi;
+
     echo "--- Step 3 Installing Dependencies ---" &&
     if [ ! -d venv ]; then python3 -m venv venv; fi &&
     ./venv/bin/pip install -r back/requirements.txt &&
-    cd front && npm install && npm run build && cd .. &&
-    echo "--- Step 4 Cleaning & Restarting PM2 Processes ---" &&
-    pm2 delete edu-back edu-front npm > /dev/null 2>&1 || true &&
-    pm2 start "~/edu/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8700" --name "edu-back" --cwd "~/edu/back" &&
-    pm2 start "npm --name edu-front -- run dev -- --host 0.0.0.0 --port 3700" --cwd "~/edu/front" &&
-    echo "--- Step 5 Final Status ---" &&
-    pm2 list &&
+    cd front && npm install && npm run build && cd ..;
+
+    echo "--- Step 4 Cleaning & Restarting PM2 Processes ---";
+    pm2 delete edu-back edu-front npm > /dev/null 2>&1 || true;
+    pm2 start /home/ubuntu/edu/venv/bin/python --name edu-back --cwd /home/ubuntu/edu/back -- -m uvicorn main:app --host 0.0.0.0 --port 8700;
+    pm2 start npm --name edu-front --cwd /home/ubuntu/edu/front -- run dev -- --host 0.0.0.0 --port 3700;
+    
+    echo "--- Step 5 Final Status ---";
+    pm2 list;
     pm2 save
 '@
 
