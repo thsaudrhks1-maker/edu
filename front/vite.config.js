@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3700,
+    allowedHosts: ['edu.sogething.com'],
     proxy: {
       '/api': 'http://localhost:8700'
     }
